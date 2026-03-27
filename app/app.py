@@ -47,11 +47,18 @@ st.markdown("""
     h1, h2, h3 { color: #00d4ff !important; }
     .stTabs [data-baseweb="tab"] { color: #aaa; }
     .stTabs [aria-selected="true"] { color: #00d4ff !important; border-bottom-color: #00d4ff !important; }
+    .byline { font-size: 13px; color: #556; margin-top: -8px; }
+    .byline a { color: #00d4ff; text-decoration: none; }
+    .byline a:hover { text-decoration: underline; }
 </style>
 """, unsafe_allow_html=True)
 
 st.title("☄️ Space Intelligence Platform")
-st.caption("Real-time asteroid hazard analysis powered by NASA NeoWs · JPL Sentry · CelesTrak")
+col_title, col_by = st.columns([6, 1])
+with col_title:
+    st.caption("Real-time asteroid hazard analysis powered by NASA NeoWs · JPL Sentry · CelesTrak")
+with col_by:
+    st.markdown('<p class="byline">by <a href="https://github.com/ManishKanuri" target="_blank">Manish Kanuri</a></p>', unsafe_allow_html=True)
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -64,6 +71,9 @@ with st.sidebar:
     st.markdown("- [NASA NeoWs API](https://api.nasa.gov)")
     st.markdown("- [JPL Sentry](https://cneos.jpl.nasa.gov/sentry)")
     st.markdown("- [CelesTrak TLE](https://celestrak.org)")
+    st.divider()
+    st.markdown("Built by **Manish Kanuri**")
+    st.markdown("[GitHub](https://github.com/ManishKanuri/Aestroid-hazard-predictor)")
 
 # ── Load live data ────────────────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
