@@ -9,8 +9,30 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from src.data_loader import fetch_neows_live, fetch_sentry_data
+from src.data_loader import fetch_neows_live, fetch_sentry_data, fetch_cad_data
 from src.preprocessing import preprocess
+from src.model import MODEL_PATH, train
+
+# ── Auto-train if model is missing or was built on a different Python version ─
+def ensure_model():
+    needs_train = False
+    if not Path(MODEL_PATH).exists():
+        needs_train = True
+    else:
+        try:
+            import joblib
+            joblib.load(MODEL_PATH)
+        except Exception:
+            needs_train = True
+
+    if needs_train:
+        with st.spinner("First run: training model on NASA JPL data (~60 seconds)..."):
+            Path(MODEL_PATH).parent.mkdir(parents=True, exist_ok=True)
+            df_raw = fetch_cad_data(date_min="2015-01-01", date_max="2024-01-01")
+            df_clean = preprocess(df_raw)
+            train(df_clean)
+
+ensure_model()
 
 st.set_page_config(
     page_title="Space Intelligence Platform",
