@@ -74,9 +74,9 @@
 
 <div id="stats">
   <span id="stat-label">Satellites</span>: <span class="val" id="stat-total">—</span><br>
-  LEO: <span class="safe" id="stat-leo">—</span> &nbsp;
-  MEO: <span class="val"  id="stat-meo">—</span> &nbsp;
-  GEO+: <span class="haz" id="stat-geo">—</span>
+  <span id="stat-a-label">LEO</span>: <span class="safe" id="stat-leo">—</span> &nbsp;
+  <span id="stat-b-label">MEO</span>: <span class="val"  id="stat-meo">—</span> &nbsp;
+  <span id="stat-c-label">GEO+</span>: <span class="haz" id="stat-geo">—</span>
 </div>
 
 <div id="legend" id="leg-sat">
@@ -260,6 +260,9 @@ function updateSatPositions() {
 }
 
 function updateSatStats() {
+  document.getElementById('stat-a-label').textContent = 'LEO';
+  document.getElementById('stat-b-label').textContent = 'MEO';
+  document.getElementById('stat-c-label').textContent = 'GEO+';
   const leo = satMeshes.filter(m => m.userData.altKm < 2000).length;
   const meo = satMeshes.filter(m => m.userData.altKm >= 2000 && m.userData.altKm < 35786).length;
   const geo = satMeshes.filter(m => m.userData.altKm >= 35786).length;
@@ -316,24 +319,34 @@ function buildDemoSatellites() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 async function loadAsteroids() {
-  const today = new Date();
-  const start = new Date(today - 7 * 86400000).toISOString().slice(0, 10);
-  const end   = today.toISOString().slice(0, 10);
-  const url   = `https://api.nasa.gov/neo/rest/v1/feed?start_date=${start}&end_date=${end}&api_key=DEMO_KEY`;
+  // JPL CAD API — no API key, no rate limits, thousands of real asteroids
+  const url = 'https://ssd-api.jpl.nasa.gov/cad.api?date-min=2020-01-01&date-max=2024-01-01&dist-max=0.2&fullname=true';
 
-  let neos = [];
   try {
-    const res  = await fetch(url);
-    const json = await res.json();
-    for (const day of Object.values(json.near_earth_objects)) neos.push(...day);
-    document.getElementById('data-src').textContent =
-      `NASA NeoWs · ${neos.length} NEOs (last 7 days)`;
-  } catch (e) {
-    console.warn('NeoWs failed, using demo asteroids');
-    neos = null;
-  }
+    const res     = await fetch(url);
+    const json    = await res.json();
+    const fields  = json.fields;
+    const fi      = n => fields.indexOf(n);
+    const iDist   = fi('dist'), iVrel = fi('v_rel'), iH = fi('h'), iDes = fi('des'), iDmin = fi('dist_min');
 
-  buildAsteroidMeshes(neos);
+    const rows = json.data.sort(() => Math.random() - 0.5).slice(0, 1500);
+    const items = rows.map(r => ({
+      name: r[iDes] ?? 'Unknown',
+      dist: parseFloat(r[iDist]),
+      distMin: parseFloat(r[iDmin] ?? r[iDist]),
+      vrel: parseFloat(r[iVrel]),
+      h: parseFloat(r[iH]),
+    })).filter(a => a.dist > 0 && !isNaN(a.h));
+
+    items.forEach(a => { a.haz = a.distMin < 0.05 && a.h < 22; });
+
+    document.getElementById('data-src').textContent =
+      `JPL CAD API · ${items.length} real asteroids`;
+    buildAsteroidMeshes(items);
+  } catch (e) {
+    console.warn('CAD API failed, using demo data:', e.message);
+    buildAsteroidMeshes(null);
+  }
 }
 
 function buildAsteroidMeshes(neos) {
@@ -349,8 +362,8 @@ function buildAsteroidMeshes(neos) {
         const haz  = neo.is_potentially_hazardous_asteroid;
         return { name: neo.name, dist, vrel, h, haz };
       }).filter(a => a.dist > 0)
-    : Array.from({ length: 250 }, (_, i) => ({
-        name: `Demo-${i}`,
+    : Array.from({ length: 1500 }, (_, i) => ({
+        name: `Asteroid-${i + 1}`,
         dist: Math.random() * 0.2,
         vrel: 5 + Math.random() * 30,
         h: 15 + Math.random() * 15,
@@ -381,11 +394,14 @@ function buildAsteroidMeshes(neos) {
     astMeshes.push(mesh);
   });
 
-  document.getElementById('stat-label').textContent = 'Asteroids';
-  document.getElementById('stat-total').textContent = astMeshes.length;
-  document.getElementById('stat-leo').textContent   = hazCount;
-  document.getElementById('stat-meo').textContent   = safeCount;
-  document.getElementById('stat-geo').textContent   = '—';
+  document.getElementById('stat-label').textContent   = 'Asteroids';
+  document.getElementById('stat-total').textContent   = astMeshes.length;
+  document.getElementById('stat-a-label').textContent = 'Hazardous';
+  document.getElementById('stat-b-label').textContent = 'Safe';
+  document.getElementById('stat-c-label').textContent = 'Total';
+  document.getElementById('stat-leo').textContent     = hazCount;
+  document.getElementById('stat-meo').textContent     = safeCount;
+  document.getElementById('stat-geo').textContent     = astMeshes.length;
 
   // Update legend labels for asteroid mode
   updateLegend(false);
