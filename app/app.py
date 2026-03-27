@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT))
 
 import numpy as np
 import pandas as pd
@@ -227,21 +228,7 @@ with tab3:
 # ── TAB 4: 3D Tracker Link ────────────────────────────────────────────────────
 with tab4:
     st.subheader("3D Earth Tracker")
-    st.markdown("""
-    The interactive 3D visualization runs in your browser as a standalone HTML file.
-
-    **To open it:**
-    ```bash
-    open app/3d-visualization/index.html
-    ```
-
-    **Features:**
-    - 🛰️ **Live satellites** from CelesTrak TLE data (SGP4 propagation)
-    - ☄️ **Real asteroids** from NASA NeoWs API
-    - Toggle between **Satellite Mode** and **Asteroid Mode**
-    - Hover tooltips, orbit trails, real-time animation
-    """)
-    if st.button("Open 3D Visualization"):
-        import subprocess
-        subprocess.Popen(["open", "app/3d-visualization/index.html"])
-        st.success("Opening in browser...")
+    st.caption("Live satellites (CelesTrak TLE · SGP4) + NASA NeoWs asteroids — drag to rotate, scroll to zoom, hover for details")
+    with open(Path(__file__).parent / "3d-visualization" / "index.html", "r") as f:
+        html_content = f.read()
+    st.components.v1.html(html_content, height=700, scrolling=False)

@@ -1,5 +1,6 @@
 import joblib
 import pandas as pd
+from pathlib import Path
 from imblearn.over_sampling import SMOTE
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import accuracy_score, classification_report, roc_auc_score
@@ -10,7 +11,7 @@ from sklearn.preprocessing import StandardScaler
 # dist_min is intentionally excluded — it is used to define the label.
 # dist (nominal close approach) is kept: dist != dist_min so no leakage.
 FEATURES = ["dist", "v_rel", "v_inf", "h", "diameter_avg_km"]
-MODEL_PATH = "models/asteroid_model.pkl"
+MODEL_PATH = Path(__file__).parent.parent / "models" / "asteroid_model.pkl"
 
 
 def train(df: pd.DataFrame) -> Pipeline:
