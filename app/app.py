@@ -1,3 +1,7 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -87,19 +91,20 @@ with tab1:
     if st.button("Predict", type="primary", use_container_width=True):
         try:
             from src.model import load_model
-            model, features = load_model()
+            scaler, clf, features = load_model()
 
-            threat_score = (1 / max(dist, 1e-6)) * v_rel / max(h_mag, 1)
             diameter_avg = diameter if diameter > 0 else 10 ** (3.1236 - 0.5 * h_mag) / 1000
+            v_inf = v_rel * 0.9
 
             input_map = {
-                "dist": dist, "v_rel": v_rel, "h": h_mag,
-                "diameter_avg_km": diameter_avg, "threat_score": threat_score,
+                "dist": dist, "v_rel": v_rel, "v_inf": v_inf,
+                "h": h_mag, "diameter_avg_km": diameter_avg,
             }
             X = pd.DataFrame([[input_map[f] for f in features]], columns=features)
+            X_scaled = scaler.transform(X)
 
-            pred = model.predict(X)[0]
-            proba = model.predict_proba(X)[0]
+            pred = clf.predict(X_scaled)[0]
+            proba = clf.predict_proba(X_scaled)[0]
             hazard_pct = proba[1] * 100
             safe_pct = proba[0] * 100
 

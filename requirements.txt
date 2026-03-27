@@ -1,6 +1,7 @@
 requests
 pandas
 scikit-learn
+imbalanced-learn
 streamlit
 joblib
 numpy
