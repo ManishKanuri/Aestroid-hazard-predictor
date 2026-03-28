@@ -212,17 +212,22 @@ function buildSatMeshes() {
   satMeshes = [];
   trailLines = [];
 
-  satRecords.forEach(({ name, satrec }) => {
-    const pv = satellite.propagate(satrec, new Date());
-    if (!pv?.position || typeof pv.position === 'boolean') return;
-
-    const pos = eciToThree(pv.position);
-    const altKm = (pos.length() - 1) * EARTH_R_KM;
+  satRecords.forEach(rec => {
+    let pos, altKm;
+    if (rec.type === 'demo') {
+      pos   = demoPos(rec.altKm, rec.inc, rec.raan, rec.ma);
+      altKm = rec.altKm;
+    } else {
+      const pv = satellite.propagate(rec.satrec, new Date());
+      if (!pv?.position || typeof pv.position === 'boolean') return;
+      pos   = eciToThree(pv.position);
+      altKm = (pos.length() - 1) * EARTH_R_KM;
+    }
     const color = altColor(altKm);
 
     const mesh = mkSphere(0.025, color);
     mesh.position.copy(pos);
-    mesh.userData = { name, satrec, altKm, trail: [], color };
+    mesh.userData = { ...rec, altKm, trail: [], color };
     satGroup.add(mesh);
     satMeshes.push(mesh);
 
@@ -240,10 +245,19 @@ function buildSatMeshes() {
 function updateSatPositions() {
   const now = new Date();
   satMeshes.forEach((mesh, i) => {
-    const pv = satellite.propagate(mesh.userData.satrec, now);
-    if (!pv?.position || typeof pv.position === 'boolean') return;
-
-    const pos = eciToThree(pv.position);
+    let pos;
+    if (mesh.userData.type === 'demo') {
+      // Advance mean anomaly: real ω scaled ×60 for visible motion
+      const GM = 3.986004418e14;
+      const r  = (EARTH_R_KM + mesh.userData.altKm) * 1000;
+      const omega = Math.sqrt(GM / (r * r * r)); // rad/s
+      mesh.userData.ma += omega * (30 / 60) * 60; // 30-frame step × 60× speedup
+      pos = demoPos(mesh.userData.altKm, mesh.userData.inc, mesh.userData.raan, mesh.userData.ma * 180 / Math.PI);
+    } else {
+      const pv = satellite.propagate(mesh.userData.satrec, now);
+      if (!pv?.position || typeof pv.position === 'boolean') return;
+      pos = eciToThree(pv.position);
+    }
     mesh.position.copy(pos);
 
     // Trail
@@ -301,29 +315,48 @@ async function loadSatellites() {
     return true;
   }).slice(0, 500);
 
-  if (satRecords.length === 0) {
+  const live = satRecords.length;
+  if (live === 0) {
     console.warn('Using demo satellites');
     satRecords = buildDemoSatellites();
+    document.getElementById('data-src').textContent = `Demo mode · ${satRecords.length} simulated satellites`;
+  } else {
+    document.getElementById('data-src').textContent = `CelesTrak TLE · ${live} satellites`;
   }
-
-  document.getElementById('data-src').textContent =
-    `CelesTrak TLE · ${satRecords.length} objects`;
   buildSatMeshes();
 }
 
 function buildDemoSatellites() {
-  // Minimal demo: ISS + GPS ring + GEO ring
+  // Direct orbital-element demo — no satellite.js / fake TLE needed
   const demo = [];
-  const mkDemo = (name, altKm, inc, raan) => {
-    const n = Math.sqrt(3.986e14 / Math.pow((EARTH_R_KM + altKm) * 1000, 3)) * (86400 / (2 * Math.PI));
-    const tle1 = `1 99999U 00000A   ${new Date().toISOString().slice(2,4)}001.00000000  .00000000  00000-0  00000-0 0  9990`;
-    const tle2 = `2 99999 ${inc.toFixed(4)} ${raan.toFixed(4)} 0000000   0.0000 000.0000 ${n.toFixed(8)}00000`;
-    try { return { name, satrec: satellite.twoline2satrec(tle1, tle2) }; } catch(_) { return null; }
-  };
-  for (let i = 0; i < 12; i++) demo.push(mkDemo(`GPS-${i+1}`, 20200, 55, i * 30));
-  for (let i = 0; i < 8; i++)  demo.push(mkDemo(`GEO-${i+1}`, 35786, 0.1, i * 45));
-  for (let i = 0; i < 6; i++)  demo.push(mkDemo(`LEO-${i+1}`, 550, 53, i * 30));
-  return demo.filter(Boolean);
+  // LEO (Starlink-like, 400–1200 km)
+  for (let i = 0; i < 120; i++)
+    demo.push({ name: `LEO-${i+1}`, altKm: 400 + Math.random() * 800,
+      inc: 45 + Math.random() * 30, raan: Math.random() * 360, ma: Math.random() * 360, type: 'demo' });
+  // MEO (GPS-like, ~20200 km)
+  for (let i = 0; i < 40; i++)
+    demo.push({ name: `GPS-${i+1}`, altKm: 19000 + Math.random() * 2500,
+      inc: 55, raan: (i / 40) * 360, ma: Math.random() * 360, type: 'demo' });
+  // GEO (35 786 km)
+  for (let i = 0; i < 40; i++)
+    demo.push({ name: `GEO-${i+1}`, altKm: 35786,
+      inc: 0.1, raan: 0, ma: (i / 40) * 360, type: 'demo' });
+  return demo;
+}
+
+// Keplerian → Three.js position (ECI: x=x, y=z_north, z=-y)
+function demoPos(altKm, incDeg, raanDeg, maDeg) {
+  const r   = (EARTH_R_KM + altKm) / EARTH_R_KM;
+  const inc = incDeg  * Math.PI / 180;
+  const ra  = raanDeg * Math.PI / 180;
+  const ma  = maDeg   * Math.PI / 180;
+  // Position in orbital plane (circular)
+  const xo = r * Math.cos(ma), yo = r * Math.sin(ma);
+  // Rotate: inclination around x-axis, then RAAN around z-axis
+  const x =  xo * Math.cos(ra) - yo * Math.cos(inc) * Math.sin(ra);
+  const y =  xo * Math.sin(ra) + yo * Math.cos(inc) * Math.cos(ra);
+  const z =  yo * Math.sin(inc);
+  return new THREE.Vector3(x, z, -y);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
