@@ -277,17 +277,29 @@ async function loadSatellites() {
   const urls = [
     'https://celestrak.org/pub/TLE/stations.txt',
     'https://celestrak.org/pub/TLE/visual.txt',
+    'https://celestrak.org/pub/TLE/starlink.txt',
+    'https://celestrak.org/pub/TLE/active.txt',
   ];
   satRecords = [];
   for (const url of urls) {
     try {
       const res = await fetch(url);
+      if (!res.ok) continue;
       const text = await res.text();
+      if (!text.trim().startsWith('0') && !text.trim().match(/^[A-Z0-9 -]/)) continue;
       satRecords.push(...parseTLE(text));
     } catch (e) {
-      console.warn('CelesTrak fetch failed:', e.message);
+      console.warn('CelesTrak fetch failed:', url, e.message);
     }
+    if (satRecords.length >= 500) break;
   }
+  // Deduplicate by name
+  const seen = new Set();
+  satRecords = satRecords.filter(r => {
+    if (seen.has(r.name)) return false;
+    seen.add(r.name);
+    return true;
+  }).slice(0, 500);
 
   if (satRecords.length === 0) {
     console.warn('Using demo satellites');
@@ -354,14 +366,7 @@ function buildAsteroidMeshes(neos) {
   astMeshes = [];
 
   const items = neos
-    ? neos.map(neo => {
-        const ca   = neo.close_approach_data[0] ?? {};
-        const dist = parseFloat(ca.miss_distance?.astronomical ?? 0);
-        const vrel = parseFloat(ca.relative_velocity?.kilometers_per_second ?? 0);
-        const h    = neo.absolute_magnitude_h;
-        const haz  = neo.is_potentially_hazardous_asteroid;
-        return { name: neo.name, dist, vrel, h, haz };
-      }).filter(a => a.dist > 0)
+    ? neos  // already parsed by loadAsteroids into { name, dist, vrel, h, haz }
     : Array.from({ length: 1500 }, (_, i) => ({
         name: `Asteroid-${i + 1}`,
         dist: Math.random() * 0.2,
